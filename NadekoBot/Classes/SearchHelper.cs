@@ -1,4 +1,4 @@
-﻿using NadekoBot.Classes.JSONModels;
+using NadekoBot.Classes.JSONModels;
 using NadekoBot.Extensions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Security.Authentication;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Xml;
 
 namespace NadekoBot.Classes
 {
@@ -178,7 +179,7 @@ namespace NadekoBot.Classes
             return obj.items[0].id.playlistId.ToString();
         }
 
-        public static async Task<IEnumerable<string>> GetVideoIDs(string playlist, int number = 30)
+        public static async Task<IEnumerable<string>> GetVideoIDs(string playlist, int number = 50)
         {
             if (string.IsNullOrWhiteSpace(NadekoBot.Creds.GoogleAPIKey))
             {
@@ -188,7 +189,7 @@ namespace NadekoBot.Classes
                 throw new ArgumentOutOfRangeException();
             var link =
                 $"https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails" +
-                $"&maxResults={30}" +
+                $"&maxResults={number}" +
                 $"&playlistId={playlist}" +
                 $"&key={NadekoBot.Creds.GoogleAPIKey}";
 
@@ -260,11 +261,24 @@ namespace NadekoBot.Classes
 
         internal static async Task<string> GetE621ImageLink(string tags)
         {
-            var rng = new Random();
-            var url = $"https://e621.net/post/index/{rng.Next(0, 5)}/{Uri.EscapeUriString(tags)}";
-            var webpage = await GetResponseStringAsync(url).ConfigureAwait(false); // first extract the post id and go to that posts page
-            var matches = Regex.Matches(webpage, "\"file_url\":\"(?<url>.*?)\"");
-            return matches[rng.Next(0, matches.Count)].Groups["url"].Value;
+            try
+            {
+                string url = "http://e621.net/post/index.xml?tags=" + Uri.EscapeUriString(tags) + "%20order:random&limit=1";
+                WebClient client = new WebClient();
+                client.Headers["User-Agent"] = "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/535.1 (KHTML, like Gecko) Chrome/14.0.835.202 Safari/535.1";
+                client.Headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+                string data = client.DownloadString(url);
+                XmlDocument doc = new XmlDocument();
+                doc.LoadXml(data);
+                XmlNodeList elemList = doc.GetElementsByTagName("file_url");
+                return elemList[0].InnerXml;
+                //XDocument doc = await Task.Run(() => XDocument.Load("http://e621.net/post/index.xml?tags=" + Uri.EscapeUriString(tags) + "%20order:random&limit=1"));
+                //return (doc.Root.Element("post").Element("file_url").Value);
+            }
+            catch (Exception)
+            {
+                return "Error, do you have too many tags?";
+            }
         }
 
         public static async Task<string> ShortenUrl(string url)
